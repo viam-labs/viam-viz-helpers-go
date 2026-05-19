@@ -124,7 +124,7 @@ func PLYASCIIBytes(verts [][3]float64, faces [][]int, vertexColors [][3]int) []b
 	var b strings.Builder
 	b.WriteString("ply\n")
 	b.WriteString("format ascii 1.0\n")
-	b.WriteString(fmt.Sprintf("element vertex %d\n", len(verts)))
+	fmt.Fprintf(&b, "element vertex %d\n", len(verts))
 	b.WriteString("property float x\n")
 	b.WriteString("property float y\n")
 	b.WriteString("property float z\n")
@@ -133,23 +133,23 @@ func PLYASCIIBytes(verts [][3]float64, faces [][]int, vertexColors [][3]int) []b
 		b.WriteString("property uchar green\n")
 		b.WriteString("property uchar blue\n")
 	}
-	b.WriteString(fmt.Sprintf("element face %d\n", len(faces)))
+	fmt.Fprintf(&b, "element face %d\n", len(faces))
 	b.WriteString("property list uchar int vertex_indices\n")
 	b.WriteString("end_header\n")
 	for i, v := range verts {
 		if hasColors {
 			c := vertexColors[i]
-			b.WriteString(fmt.Sprintf("%.6f %.6f %.6f %d %d %d\n",
+			fmt.Fprintf(&b, "%.6f %.6f %.6f %d %d %d\n",
 				v[0]/1000.0, v[1]/1000.0, v[2]/1000.0,
-				clampU8(c[0]), clampU8(c[1]), clampU8(c[2])))
+				clampU8(c[0]), clampU8(c[1]), clampU8(c[2]))
 		} else {
-			b.WriteString(fmt.Sprintf("%.6f %.6f %.6f\n", v[0]/1000.0, v[1]/1000.0, v[2]/1000.0))
+			fmt.Fprintf(&b, "%.6f %.6f %.6f\n", v[0]/1000.0, v[1]/1000.0, v[2]/1000.0)
 		}
 	}
 	for _, f := range faces {
-		b.WriteString(fmt.Sprintf("%d", len(f)))
+		fmt.Fprintf(&b, "%d", len(f))
 		for _, idx := range f {
-			b.WriteString(fmt.Sprintf(" %d", idx))
+			fmt.Fprintf(&b, " %d", idx)
 		}
 		b.WriteString("\n")
 	}
@@ -259,18 +259,18 @@ func STLToPLY(stl []byte) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString("ply\n")
 	b.WriteString("format ascii 1.0\n")
-	b.WriteString(fmt.Sprintf("element vertex %d\n", len(verts)))
+	fmt.Fprintf(&b, "element vertex %d\n", len(verts))
 	b.WriteString("property float x\n")
 	b.WriteString("property float y\n")
 	b.WriteString("property float z\n")
-	b.WriteString(fmt.Sprintf("element face %d\n", len(faces)))
+	fmt.Fprintf(&b, "element face %d\n", len(faces))
 	b.WriteString("property list uchar int vertex_indices\n")
 	b.WriteString("end_header\n")
 	for _, v := range verts {
-		b.WriteString(fmt.Sprintf("%.6f %.6f %.6f\n", v[0], v[1], v[2]))
+		fmt.Fprintf(&b, "%.6f %.6f %.6f\n", v[0], v[1], v[2])
 	}
 	for _, f := range faces {
-		b.WriteString(fmt.Sprintf("3 %d %d %d\n", f[0], f[1], f[2]))
+		fmt.Fprintf(&b, "3 %d %d %d\n", f[0], f[1], f[2])
 	}
 	return []byte(b.String()), nil
 }
