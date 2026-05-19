@@ -197,14 +197,41 @@ func (s *SceneServiceBase) hookBaseGeomForItem(item Item) BaseGeom {
 	return DefaultBaseGeomForItem(item)
 }
 
-// SceneServiceBase is the inheritable WSS service base. See package
-// docstring for the contract.
+// SceneServiceBase is the inheritable worldstatestore.Service base.
+// A module's service struct embeds it, sets Hooks to an instance
+// satisfying whatever optional interfaces the module needs (see
+// SceneHooks doc), and gets the WSS plumbing for free: state map,
+// subscriber fanout, tick goroutine, standard DoCommand verbs, and
+// renderer-quirk workarounds (camelCase paths, REMOVE+ADD respawn
+// on metadata changes, UUID rotation on lifecycle re-add).
+//
+// Two animation paths coexist:
+//
+//   - Scene-centric (recommended): Hooks implements SceneTicker.
+//     SetScene installs typed Visual objects; SceneTick mutates them
+//     and returns events from scene.Update. The library translates
+//     metadata-touching empty-paths UPDATEDs into respawns.
+//   - Legacy per-item (LegacyAnimator): Hooks implements
+//     ComputeTick + IsAnimated. Returns a TickResult per animated
+//     item per tick; the library handles wire-format emission.
+//
+// The legacy path is checked only when SceneTicker is not
+// implemented — modules can mix paradigms but not within the same
+// service instance.
+//
+// All public fields below are set in the module's constructor
+// before Reconfigure is called. Zero values trigger sensible
+// fallbacks (see DefaultTickHzOr etc.). The unexported fields hold
+// runtime state; access them through methods (State, Mu).
 type SceneServiceBase struct {
 	Hooks  SceneHooks
 	Logger logging.Logger
 
-	// Defaults — set these in the module's constructor before
-	// calling Reconfigure (zero values mean "use a sensible fallback").
+	// Defaults — set in the module's constructor before calling
+	// Reconfigure. Zero values fall back to library defaults
+	// (DefaultTickHz: 30 Hz, DefaultUUIDStrategy: "stable",
+	// DefaultParentFrame: "world", DefaultChunkSizePoints: 2000,
+	// MaxTickHz: 30 Hz).
 	DefaultTickHz          float64
 	DefaultUUIDStrategy    string
 	DefaultParentFrame     string
@@ -606,7 +633,17 @@ func poseToProto(p Pose) *commonpb.Pose {
 }
 
 // ---- WorldStateStore API ---------------------------------------------
+//
+// The three methods below satisfy the worldstatestore.Service
+// interface. Services embedding SceneServiceBase get the
+// implementation for free — no override is needed unless you're
+// adding cross-cutting behavior (auth, instrumentation, etc.).
 
+// ListUUIDs returns the current UUID of every entity that is visible
+// to the viewer right now. Items whose flicker/lifecycle animations
+// have them temporarily off-screen are skipped. UUIDs are copied
+// before return so the caller can hold them past the next state
+// mutation.
 func (s *SceneServiceBase) ListUUIDs(_ context.Context, _ map[string]any) ([][]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -620,6 +657,11 @@ func (s *SceneServiceBase) ListUUIDs(_ context.Context, _ map[string]any) ([][]b
 	return out, nil
 }
 
+// GetTransform looks up a single entity by UUID and returns the
+// cached Transform proto the viewer should display. Returns an
+// error if the UUID isn't in the state map, or if the entity is
+// currently scene-graph-removed by a flicker/lifecycle animation
+// (the entity will reappear with a fresh UUID).
 func (s *SceneServiceBase) GetTransform(_ context.Context, uuid []byte, _ map[string]any) (*commonpb.Transform, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -635,6 +677,24 @@ func (s *SceneServiceBase) GetTransform(_ context.Context, uuid []byte, _ map[st
 	return nil, fmt.Errorf("unknown uuid %q", string(uuid))
 }
 
+// StreamTransformChanges opens a subscriber channel and streams
+// transform changes to the caller. Behavior on join:
+//
+//  1. The subscriber is added to the fanout list.
+//  2. An initial-burst of ADDED events is sent — one per currently-
+//     visible entity, with that entity's current UUID and Transform.
+//     This brings the new subscriber up to the present moment.
+//  3. Subsequent broadcasts (from the animation tick, applyEvents,
+//     or DoCommand mutations) flow through the same channel.
+//
+// The channel has cap=256. If the consumer falls behind and the
+// queue fills, subsequent broadcasts non-blocking-drop with a
+// warning rather than stalling the tick. Long-running animations
+// that respawn fast (high-rate metadata changes — see SnapStep) can
+// outrun a slow consumer; snap the source values or accept the drop.
+//
+// The stream auto-closes when ctx is cancelled; the subscriber is
+// removed from the fanout list at that point.
 func (s *SceneServiceBase) StreamTransformChanges(ctx context.Context, _ map[string]any) (*worldstatestore.TransformChangeStream, error) {
 	ch := make(chan worldstatestore.TransformChange, 256)
 	s.mu.Lock()

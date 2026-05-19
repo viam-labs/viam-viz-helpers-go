@@ -10,12 +10,24 @@ import (
 // for the common patterns (coordinate-frame triad, polyline as
 // capsule chain, wireframe bounding box) where a single typed
 // object wraps the underlying multi-item shape.
+//
+// Scene.Add(composite) calls ToVisuals and installs each
+// constituent independently; the composite itself is not tracked.
+// Each composite's ToVisuals must return pointer-type Visuals
+// (&Sphere{...}, &Arrow{...}, etc.) so animation.Apply can mutate
+// them — value-type returns would fall through the pointer-only
+// type switches in setVisualPose / setVisualColor / etc.
+//
+// Constituent labels are derived from the composite's Label or
+// LabelPrefix field. Two composites whose constituents share a
+// label collide at Scene.Add — pick distinct labels per composite.
 type Composite interface {
 	ToVisuals() []Visual
 }
 
-// CoordinateFrame — anchor sphere + three colored axis capsules
-// parented to the anchor.
+// CoordinateFrame is an anchor sphere plus three colored axis arrows
+// parented to the anchor (a typed wrapper for the
+// parent-frame-composition pattern).
 //
 // Use this whenever you'd otherwise hand-build a parent-anchor
 // sphere plus three axis-aligned capsules — the
@@ -142,8 +154,12 @@ func ptrB(v bool) *bool { return &v }
 // synthesizes one from capsules whose local +Z is aligned to each
 // segment's direction.
 //
-// Points further apart than ~1 µm get a segment between them;
-// coincident points are skipped silently.
+// Points further apart than 1 µm (segment length >= 1e-6) get a
+// capsule segment between them; closer-than-1µm pairs are skipped
+// silently (a sub-µm capsule would render as nothing).
+//
+// WidthMM is the diameter of the line in mm; defaults to 4.0 when
+// zero. Each segment's local +Z is aligned to the segment direction.
 type Line struct {
 	LabelPrefix string
 	Points      []Pose
@@ -153,8 +169,9 @@ type Line struct {
 	Opacity     *float64
 }
 
-// ToVisuals expands the polyline into a chain of capsule segments.
-// Labels follow "<LabelPrefix>_seg_NN".
+// ToVisuals expands the polyline into a chain of *Capsule segments.
+// Labels follow "<LabelPrefix>_seg_NN" (zero-padded, in point order,
+// skipping any sub-µm segments). Panics if len(Points) < 2.
 func (l Line) ToVisuals() []Visual {
 	if len(l.Points) < 2 {
 		panic(fmt.Sprintf("Line needs at least 2 points; got %d", len(l.Points)))
@@ -189,15 +206,20 @@ func (l Line) ToVisuals() []Visual {
 	return out
 }
 
-// BoundingBox — axis-aligned bounding box.
+// BoundingBox is an axis-aligned bounding box, either solid or
+// wireframe.
 //
-// With Wireframe=false (default), produces a single solid Box.
-// With Wireframe=true, produces 12 capsule edges tracing the box
-// outline — useful for object-detection overlays where you want the
-// bounds without occluding what's inside.
+// With Wireframe=false (default), produces a single solid *Box with
+// the given DimsMM. With Wireframe=true, produces 12 capsule edges
+// tracing the box outline — useful for object-detection overlays
+// where you want bounds without occluding what's inside.
 //
 // Internal labels (wireframe mode): "<Label>_edge_NN" for the 12
-// edges, indexed in (x, y, z) order.
+// edges, indexed in (x, y, z) order (4 X-edges, then 4 Y-edges,
+// then 4 Z-edges; the NN suffix is zero-padded).
+//
+// EdgeRadiusMM controls the wireframe stroke thickness; defaults
+// to 2.0 when zero. DimsMM must be all > 0.
 type BoundingBox struct {
 	Label        string
 	DimsMM       BoxDims

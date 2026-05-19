@@ -3,8 +3,18 @@ package visuals
 import "fmt"
 
 // Visual is the typed scene-item interface: anything that can produce
-// an Item. Each primitive struct (Box, Sphere, …) implements it;
-// composites can too.
+// an Item (the wire-format value type). Each primitive struct (Box,
+// Sphere, Capsule, Point, Frame, Arrow, Mesh, PointCloud) implements
+// it via a value receiver.
+//
+// Pointer convention: pass pointers to the Scene
+// (&visuals.Box{...}, not visuals.Box{...}). The Scene stores the
+// Visual interface but Animation.Apply mutates the underlying struct
+// in place via type-switch on the concrete pointer type (*Box,
+// *Sphere, …). Value-type Visuals fall through silently — animations
+// would not move them. The shape constructors and composite
+// expansions in this package all return pointer types for this
+// reason.
 type Visual interface {
 	ToItem() Item
 }
@@ -27,8 +37,17 @@ func ToItems(vs ...Visual) []Item {
 // plus its shape-specific fields. Duplicating the common fields per
 // struct (rather than embedding) keeps struct-literal call sites
 // idiomatic — no nested initialization paths.
+//
+// Pointer-field conventions:
+//   - Color *Color, Opacity *float64: nil means "use the renderer's
+//     default" (gray, fully opaque). Take the address of a stack-
+//     allocated value: c := visuals.Color{R: 255}; box.Color = &c.
+//   - Animation AnimationSpec: interface, nil = static. Set to a
+//     concrete spec value (Spin{...}, Pulse{...}, …) and the
+//     library's SceneTick dispatch will call Apply on every tick.
 
-// Box — solid axis-aligned box. DimsMM is (x, y, z) in mm.
+// Box is a solid axis-aligned box. DimsMM (x, y, z) gives the
+// extent in millimeters; all three dimensions must be > 0.
 type Box struct {
 	Label          string
 	Pose           Pose
@@ -56,7 +75,8 @@ func (b Box) ToItem() Item {
 	}
 }
 
-// Sphere — solid sphere of the given radius in mm.
+// Sphere is a solid sphere of the given radius in millimeters.
+// RadiusMM must be > 0.
 type Sphere struct {
 	Label          string
 	Pose           Pose
@@ -83,8 +103,10 @@ func (s Sphere) ToItem() Item {
 	}
 }
 
-// Capsule — cylinder with hemispherical end caps. RadiusMM is the
-// cylinder radius; LengthMM is the total length.
+// Capsule is a cylinder with hemispherical end caps. RadiusMM is the
+// cylinder radius; LengthMM is the total tip-to-tip length (including
+// both hemispherical caps). The local +Z axis is the long axis.
+// Both fields must be > 0.
 type Capsule struct {
 	Label          string
 	Pose           Pose
@@ -113,12 +135,14 @@ func (c Capsule) ToItem() Item {
 	}
 }
 
-// Point — marker point.
+// Point is a marker point — a position with no extent.
 //
-// The wire format has no Point primitive; this is internally
-// rendered as a small sphere whose radius is fixed by the service
-// implementation (a zero-radius sphere renders as nothing in the
-// viewer).
+// The wire format has no first-class Point primitive; this is
+// internally rendered as a small sphere whose radius is fixed by
+// the service implementation's BuildGeometry hook (the default
+// BuildBasicGeometry uses PointMarkerRadiusMM = 8). A zero-radius
+// sphere would render as nothing in the viewer, so the radius is
+// not user-configurable here.
 type Point struct {
 	Label          string
 	Pose           Pose
@@ -193,9 +217,13 @@ func (f Frame) ToItem() Item {
 	}
 }
 
-// Arrow — procedural cylinder-shaft + cone-tip mesh along the
-// entity's local +Z. LengthMM is the total tip-to-tail length;
-// RadiusMM is the shaft radius.
+// Arrow is a procedural cylinder-shaft + cone-tip mesh along the
+// entity's local +Z axis.
+//
+// LengthMM is the total tail-to-tip length; RadiusMM is the shaft
+// radius (the cone tip is a fixed multiple of this). To point an
+// arrow from one world point to another, use ArrowFromTo — it
+// computes the orientation vector and length for you.
 type Arrow struct {
 	Label          string
 	Pose           Pose
@@ -224,11 +252,20 @@ func (a Arrow) ToItem() Item {
 	}
 }
 
-// Mesh — mesh loaded from a PLY or STL asset.
+// Mesh is a mesh loaded from a PLY or STL asset on disk.
 //
-// STL is auto-converted to PLY at load time unless RawSTL is true;
-// the raw path is a deliberate opt-out for the silent-drop
-// bug-demo and should not be used in production.
+// MeshPath is resolved by the service's AssetReader hook (the
+// library doesn't open files); pass a path relative to the module
+// directory or whatever convention the service implements. STL is
+// auto-converted to PLY at load time via STLToPLY because the
+// viewer only renders PLY meshes — see LESSONS.md::mesh-formats in
+// the consuming example module.
+//
+// Set RawSTL=true to deliberately bypass the STL→PLY conversion
+// and ship raw STL bytes with content_type="stl". The proto and
+// RDK reader accept this, but the viewer silently drops it. This
+// field exists solely to reproduce that bug; production callers
+// must leave it false.
 type Mesh struct {
 	Label          string
 	Pose           Pose
@@ -256,9 +293,21 @@ func (m Mesh) ToItem() Item {
 	}
 }
 
-// PointCloud — point cloud loaded from a PCD asset. Set Chunked=true
-// with a positive ChunkSize to opt into experimental chunked
-// delivery. The chunked-delivery wire contract is unverified.
+// PointCloud is a point cloud loaded from a PCD asset.
+//
+// PCD bytes must match RDK's pointcloud.ToPCD format byte-for-byte
+// (binary, "VERSION .7" literal, no leading "#" comments). The
+// viewer's parser is strict-order; ASCII / binary_compressed / extra
+// comments silently fail. See ParsePCDBinary in pcd_io.go for what
+// the library accepts.
+//
+// Setting Chunked=true with a positive ChunkSize opts into
+// experimental chunked delivery: the service ships chunk 0 inline
+// in the initial transform with a metadata.chunks sub-struct, and
+// exposes the rest via the get_entity_chunk DoCommand verb. The
+// viewer's behavior on this contract is unverified — whether it
+// fetches subsequent chunks is open. Leave Chunked=false unless
+// specifically probing the chunked path.
 type PointCloud struct {
 	Label          string
 	Pose           Pose

@@ -31,33 +31,50 @@ const (
 	PathMetadataOpac  = "metadata.opacity"
 )
 
-// SupportedModes — closed set of valid animation.mode values.
+// SupportedModes is the closed set of valid Animation.Mode values
+// the library and the worldstatestore wire format recognize. Items
+// with a Mode outside this set are rejected at validation time.
 var SupportedModes = []string{
 	"none", "orbit", "oscillate", "spin", "swing", "pulse", "trajectory",
 	"force_vector", "breathe", "flicker", "lifecycle",
 }
 
-// SupportedAxes — for modes that take an axis parameter.
+// SupportedAxes is the closed set of valid Axis values for the
+// animation modes that take one (Oscillate, Pulse with a specific
+// axis, Orbit). Modes that ignore Axis treat it as the empty string.
 var SupportedAxes = []string{"x", "y", "z"}
 
-// Lifecycle convention colors from the official worldstatestore
-// guide: blue@50% opacity (appearing), orange@100% (alive),
-// red@50% (disappearing), then REMOVED (gone).
+// Lifecycle-convention colors and opacities, used by the Lifecycle
+// animation mode's Apply method. Matches the official
+// worldstatestore guide: blue@50% (appearing), orange@100% (alive),
+// red@50% (disappearing), then REMOVED (gone). Exported so module
+// authors implementing custom Lifecycle behavior can match the
+// convention without re-defining the palette.
 var (
 	LifecycleColorAppearing    = Color{R: 66, G: 165, B: 245}
 	LifecycleColorAlive        = Color{R: 255, G: 152, B: 0}
 	LifecycleColorDisappearing = Color{R: 244, G: 67, B: 54}
 	LifecycleOpacityAppearing  = 0.5
 	LifecycleOpacityAlive      = 1.0
-	LifecycleOpacityDispearing = 0.5
+	LifecycleOpacityDisappearing = 0.5
 )
 
+// LifecycleOpacityDispearing is a typo-preserving alias for
+// LifecycleOpacityDisappearing. Deprecated: use the correctly-spelled
+// constant.
+var LifecycleOpacityDispearing = LifecycleOpacityDisappearing
+
 // Animation is the per-item animation config (Item.Animation). It's
-// the union of every per-mode parameter — only the fields relevant
-// to the selected Mode are read by the tick loop.
+// the **union** of every per-mode parameter: only the fields
+// relevant to the selected Mode are read by the tick loop, the rest
+// are ignored. For example, when Mode is "spin", only PeriodS is
+// read; the trajectory Waypoints field is meaningless and untouched.
 //
 // Construct typically through one of the typed AnimationSpec
-// implementations (Spin, Pulse, …) and their ToAnimation method.
+// implementations (Spin, Pulse, …) and their ToAnimation method,
+// which validate the mode-specific subset of fields. Constructing
+// an Animation literal by hand is supported but error-prone — easy
+// to forget which fields the chosen Mode actually consumes.
 type Animation struct {
 	Mode string
 	// Pose-based modes.
@@ -97,20 +114,34 @@ func IsAnimated(a Animation) bool {
 }
 
 // Overrides bundles per-tick metadata overrides emitted by certain
-// animation modes (force_vector emits color; breathe emits opacity;
-// flicker / lifecycle emit InScene; lifecycle emits all three).
+// animation modes — these mutate fields the renderer drops on
+// UPDATED, so the library translates them into a REMOVE+ADD respawn
+// at the wire. ForceVector emits Color; Breathe emits Opacity;
+// Flicker and Lifecycle emit InScene; Lifecycle emits all three.
+//
+// InScene semantics: nil means "no scene-graph mutation this tick"
+// (the entity stays in whichever state it's in). A non-nil pointer
+// is an explicit declaration: *true = "make sure this entity is in
+// the scene" (rising edge triggers ADD); *false = "remove it"
+// (falling edge triggers REMOVE).
 type Overrides struct {
 	Color   *Color
 	Opacity *float64
-	InScene *bool // nil = no scene-graph mutation; ptr = explicit in_scene
+	InScene *bool
 }
 
 // BaseGeom holds the shape-specific base dim/radius/length fields.
-// Only one set of fields is meaningful per shape type. The
-// PCDBytesOverride field is a service-layer escape hatch for
-// chunked delivery: when non-nil, the geometry builder for
-// pointcloud items emits these bytes instead of reading the file
-// fresh.
+//
+// Only one set of fields is meaningful per shape type:
+//   - box: Dims + HasDims
+//   - sphere: RadiusMM
+//   - capsule, arrow: RadiusMM + LengthMM
+//   - point, mesh, pointcloud: none of the above are read
+//
+// The PCDBytesOverride field is a service-layer escape hatch for
+// chunked-delivery pointclouds: when non-nil, the geometry builder
+// for pointcloud items emits these bytes instead of reading the
+// file fresh. Used internally; callers typically leave it nil.
 type BaseGeom struct {
 	RadiusMM         float64
 	LengthMM         float64
@@ -119,7 +150,17 @@ type BaseGeom struct {
 	PCDBytesOverride []byte
 }
 
-// TickResult is what an Animation tick function returns.
+// TickResult is the return value of LegacyAnimator.ComputeTick.
+// Pose and Geom are the new state for the entity this tick. Paths
+// is the camelCase field-mask path list naming what changed —
+// emitted in the UPDATED event's UpdatedFields. Overrides, if
+// non-nil, carries metadata / scene-graph-membership changes that
+// the library translates into respawn events (REMOVE+ADD with a
+// fresh UUID) since the renderer drops metadata.* on UPDATED.
+//
+// Deprecated: prefer the SceneTicker + Animation.Apply path, which
+// returns []SceneEvent directly and lets the library handle the
+// respawn dispatch via Scene.Update.
 type TickResult struct {
 	Pose      Pose
 	Geom      BaseGeom

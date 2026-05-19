@@ -45,8 +45,15 @@ func SpinPose(base Pose, periodS, t float64) Pose {
 
 // OrbitPose returns base with position orbiting in a circle of
 // radiusMM around base's position, in the plane perpendicular to
-// axis. Default axis is "z" (orbit in world XY). Use "y" for XZ
-// (vertical loop) or "x" for YZ.
+// axis.
+//
+// Axis values: "z" (or empty string — default; orbit in world XY),
+// "y" (XZ — vertical loop facing +Y), "x" (YZ). Panics on any
+// other value.
+//
+// The orientation portion of the pose is preserved from base;
+// only XYZ position is rotated. Negative radiusMM reverses the
+// orbit direction (or equivalently, phase-shifts by π).
 func OrbitPose(base Pose, periodS, radiusMM, t float64, axis string) Pose {
 	b := fillPose(base)
 	phase := 2 * math.Pi * t / periodS
@@ -68,8 +75,11 @@ func OrbitPose(base Pose, periodS, radiusMM, t float64, axis string) Pose {
 }
 
 // OscillatePose returns base with one position axis offset by
-// amplitudeMM × sin(2π t / periodS). Pass axis="x"/"y"/"z" (default
-// "y").
+// amplitudeMM × sin(2π t / periodS).
+//
+// Axis values: "x", "y" (or empty string — default), "z". Panics on
+// any other value. The orientation portion of the pose is preserved.
+// Negative amplitudeMM inverts the phase.
 func OscillatePose(base Pose, periodS, amplitudeMM, t float64, axis string) Pose {
 	b := fillPose(base)
 	delta := amplitudeMM * math.Sin(2*math.Pi*t/periodS)
