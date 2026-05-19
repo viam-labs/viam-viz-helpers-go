@@ -51,11 +51,11 @@ var SupportedAxes = []string{"x", "y", "z"}
 // authors implementing custom Lifecycle behavior can match the
 // convention without re-defining the palette.
 var (
-	LifecycleColorAppearing    = Color{R: 66, G: 165, B: 245}
-	LifecycleColorAlive        = Color{R: 255, G: 152, B: 0}
-	LifecycleColorDisappearing = Color{R: 244, G: 67, B: 54}
-	LifecycleOpacityAppearing  = 0.5
-	LifecycleOpacityAlive      = 1.0
+	LifecycleColorAppearing      = Color{R: 66, G: 165, B: 245}
+	LifecycleColorAlive          = Color{R: 255, G: 152, B: 0}
+	LifecycleColorDisappearing   = Color{R: 244, G: 67, B: 54}
+	LifecycleOpacityAppearing    = 0.5
+	LifecycleOpacityAlive        = 1.0
 	LifecycleOpacityDisappearing = 0.5
 )
 

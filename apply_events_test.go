@@ -21,17 +21,17 @@ func asWSChan(ch chan worldstatestore.TransformChange) chan worldstatestore.Tran
 
 type fakeHooks struct{}
 
-func (fakeHooks) BuildGeometry(item Item, override BaseGeom) (*commonpb.Geometry, error) {
+func (fakeHooks) BuildGeometry(_ Item, _ BaseGeom) (*commonpb.Geometry, error) {
 	// Minimal geometry — apply_events doesn't actually need the
 	// geom contents, just that BuildGeometry returns a non-error.
 	return &commonpb.Geometry{}, nil
 }
-func (fakeHooks) ReadAsset(path string) ([]byte, error) { return nil, nil }
+func (fakeHooks) ReadAsset(_ string) ([]byte, error) { return nil, nil }
 func (fakeHooks) ComputeTick(item Item, _ Pose, _ BaseGeom, _ float64) TickResult {
 	return TickResult{Pose: item.Pose}
 }
-func (fakeHooks) IsAnimated(item Item) bool              { return false }
-func (fakeHooks) LoadPreset(name string) ([]Item, error) { return nil, nil }
+func (fakeHooks) IsAnimated(_ Item) bool              { return false }
+func (fakeHooks) LoadPreset(_ string) ([]Item, error) { return nil, nil }
 func (fakeHooks) BaseGeomForItem(item Item) BaseGeom {
 	bg := BaseGeom{}
 	if item.HasDims {
@@ -46,6 +46,7 @@ func (fakeHooks) BaseGeomForItem(item Item) BaseGeom {
 	}
 	return bg
 }
+
 func (fakeHooks) HandleCustomCommand(_ context.Context, _ map[string]any) (map[string]any, bool, error) {
 	return nil, false, nil
 }

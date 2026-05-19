@@ -209,7 +209,7 @@ func (p Pulse) Apply(visual, base Visual, t float64) {
 
 // Apply on Breathe: opacity oscillates around base.Opacity.
 func (b Breathe) Apply(visual, base Visual, t float64) {
-	var baseOpacity float64 = 1.0
+	baseOpacity := 1.0
 	switch x := base.(type) {
 	case *Box:
 		if x.Opacity != nil {
@@ -251,12 +251,12 @@ func (l Lifecycle) Apply(visual, _ Visual, t float64) {
 	cycle := l.AppearS + l.AliveS + l.DisappearS + l.GoneS
 	local := math.Mod(t+l.PhaseOffsetS, cycle)
 	var (
-		colorAppear     = Color{R: 95, G: 150, B: 255}
-		colorAlive      = Color{R: 255, G: 150, B: 50}
-		colorDisappear  = Color{R: 255, G: 90, B: 70}
-		opAppear        = 0.5
-		opAlive         = 1.0
-		opDisappear     = 0.5
+		colorAppear    = Color{R: 95, G: 150, B: 255}
+		colorAlive     = Color{R: 255, G: 150, B: 50}
+		colorDisappear = Color{R: 255, G: 90, B: 70}
+		opAppear       = 0.5
+		opAlive        = 1.0
+		opDisappear    = 0.5
 	)
 	if local < l.AppearS {
 		c := colorAppear

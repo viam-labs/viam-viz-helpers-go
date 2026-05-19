@@ -21,9 +21,9 @@ type BoxDims struct{ X, Y, Z float64 }
 //	sphere.Color = &c
 //	return scene.Update(sphere)
 func HSVToRGB(h, s, v float64) Color {
-	h = h - float64(int(h)) // h mod 1
+	h -= float64(int(h)) // h mod 1
 	if h < 0 {
-		h += 1
+		h++
 	}
 	h6 := h * 6.0
 	i := int(h6) % 6

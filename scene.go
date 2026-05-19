@@ -320,7 +320,7 @@ func flattenLabels(in []interface{}) []string {
 // visualizer).
 //
 // See LESSONS.md::renderer-honors-only-pose-and-physicalobject-on-updated.
-func diffPaths(old, new Item) []string {
+func diffPaths(oldI, newI Item) []string {
 	var paths []string
 
 	// Pose: per-subfield diff. All seven keys share the renderer's
@@ -329,53 +329,53 @@ func diffPaths(old, new Item) []string {
 	// Including ox/oy/oz means orientation-only mutations
 	// (precession, "face the next waypoint") still emit at least
 	// one path and propagate to the renderer.
-	if old.Pose.X != new.Pose.X {
+	if oldI.Pose.X != newI.Pose.X {
 		paths = append(paths, PathX)
 	}
-	if old.Pose.Y != new.Pose.Y {
+	if oldI.Pose.Y != newI.Pose.Y {
 		paths = append(paths, PathY)
 	}
-	if old.Pose.Z != new.Pose.Z {
+	if oldI.Pose.Z != newI.Pose.Z {
 		paths = append(paths, PathZ)
 	}
-	if old.Pose.OX != new.Pose.OX {
+	if oldI.Pose.OX != newI.Pose.OX {
 		paths = append(paths, PathOX)
 	}
-	if old.Pose.OY != new.Pose.OY {
+	if oldI.Pose.OY != newI.Pose.OY {
 		paths = append(paths, PathOY)
 	}
-	if old.Pose.OZ != new.Pose.OZ {
+	if oldI.Pose.OZ != newI.Pose.OZ {
 		paths = append(paths, PathOZ)
 	}
-	if old.Pose.Theta != new.Pose.Theta {
+	if oldI.Pose.Theta != newI.Pose.Theta {
 		paths = append(paths, PathTheta)
 	}
 
 	// Geometry scalars the renderer rebuilds via physicalObject.*.
-	if old.RadiusMM != new.RadiusMM {
+	if oldI.RadiusMM != newI.RadiusMM {
 		paths = append(paths, PathSphereRadius)
 	}
-	if old.LengthMM != new.LengthMM {
+	if oldI.LengthMM != newI.LengthMM {
 		paths = append(paths, PathCapsuleLength)
 	}
 
 	// Box dims_mm: per-axis diff. The renderer reads the full Box
 	// geometry on any physicalObject* path.
-	if old.HasDims || new.HasDims {
-		if old.DimsMM.X != new.DimsMM.X {
+	if oldI.HasDims || newI.HasDims {
+		if oldI.DimsMM.X != newI.DimsMM.X {
 			paths = append(paths, PathBoxDimsX)
 		}
-		if old.DimsMM.Y != new.DimsMM.Y {
+		if oldI.DimsMM.Y != newI.DimsMM.Y {
 			paths = append(paths, PathBoxDimsY)
 		}
-		if old.DimsMM.Z != new.DimsMM.Z {
+		if oldI.DimsMM.Z != newI.DimsMM.Z {
 			paths = append(paths, PathBoxDimsZ)
 		}
 	}
 
 	// Mesh path swap: renderer re-parses the PLY and sets
 	// traits.BufferGeometry.
-	if old.MeshPath != new.MeshPath {
+	if oldI.MeshPath != newI.MeshPath {
 		paths = append(paths, "physicalObject.mesh")
 	}
 
@@ -398,20 +398,20 @@ func diffPaths(old, new Item) []string {
 // Scene.Update emits an UPDATED with empty Paths for any of these
 // changes; SceneServiceBase.applyEvents translates that into the
 // REMOVE + re-ADD respawn.
-func requiresRespawn(old, new Item) bool {
-	if old.ParentFrame != new.ParentFrame {
+func requiresRespawn(oldI, newI Item) bool {
+	if oldI.ParentFrame != newI.ParentFrame {
 		return true
 	}
-	if old.ShowAxesHelper != new.ShowAxesHelper {
+	if oldI.ShowAxesHelper != newI.ShowAxesHelper {
 		return true
 	}
-	if old.Invisible != new.Invisible {
+	if oldI.Invisible != newI.Invisible {
 		return true
 	}
-	if !colorEqual(old.Color, new.Color) {
+	if !colorEqual(oldI.Color, newI.Color) {
 		return true
 	}
-	if !float64PtrEqual(old.Opacity, new.Opacity) {
+	if !float64PtrEqual(oldI.Opacity, newI.Opacity) {
 		return true
 	}
 	return false

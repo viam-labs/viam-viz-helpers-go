@@ -1,0 +1,70 @@
+# golangci-lint config for viam-viz-helpers-go.
+#
+# Goal: catch real defects (vet, ineffassign, unused, staticcheck) plus
+# style consistency (gofumpt, misspell, revive) without forcing
+# RDK-grade strictness on a library this small. Add linters incrementally
+# as the codebase grows.
+#
+# Run via `make lint` or directly with `golangci-lint run`.
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofumpt
+    - misspell
+    - unconvert
+    - revive
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # not worth the call-site churn for this many small structs
+      - shadow          # too noisy in pose / scene math
+  revive:
+    # revive's defaults are a strong baseline. We override only the
+    # rules that produce noise on conventional test idioms.
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+        exclude: ["TEST"]  # keep `t *testing.T` named for readability
+      - name: redefines-builtin-id
+
+issues:
+  exclude-rules:
+    # Test helpers often have unused params dictated by the interface
+    # they implement (SceneHooks, etc.); renaming them to `_` hurts
+    # readability and obscures what's wired up.
+    - path: _test\.go
+      linters:
+        - revive
+      text: "unused-parameter"

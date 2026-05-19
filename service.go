@@ -63,10 +63,10 @@ import (
 // Available capabilities (each is its own interface in this file):
 //
 //   - GeometryBuilder       — custom item.Type → proto Geometry mapping.
-//                             Default: visuals.BuildBasicGeometry,
-//                             handles box/sphere/capsule/point/arrow.
+//     Default: visuals.BuildBasicGeometry,
+//     handles box/sphere/capsule/point/arrow.
 //   - BaseGeomProvider      — custom item.Type → BaseGeom extraction.
-//                             Default: visuals.DefaultBaseGeomForItem.
+//     Default: visuals.DefaultBaseGeomForItem.
 //   - AssetReader           — mesh / pointcloud loading.
 //   - PresetLoader          — "preset" DoCommand verb.
 //   - CustomCommandHandler  — additional DoCommand verbs.
